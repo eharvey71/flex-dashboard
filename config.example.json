@@ -1,0 +1,35 @@
+{
+  "timezone": "America/New_York",
+  "jira": {
+    "site": "<your-site>.atlassian.net",
+    "account_email": "you@example.com",
+    "jql": "assignee = currentUser() AND statusCategory != Done ORDER BY duedate ASC, priority DESC",
+    "max_issues": 40
+  },
+  "github": {
+    "login": "your-github-login",
+    "org": "your-org",
+    "watch_repos": [],
+    "include_review_requests": true,
+    "include_assigned_prs": true,
+    "stale_days": 2
+  },
+  "google": {
+    "account": "you@example.com",
+    "calendar_ids": [
+      "primary"
+    ],
+    "gmail_query": "in:inbox is:unread -category:promotions -category:social newer_than:7d",
+    "max_messages": 30
+  },
+  "ranking": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "max_tasks": 14,
+    "max_priorities": 3
+  },
+  "output": {
+    "dir": "out",
+    "keep_days": 30
+  }
+}

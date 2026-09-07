@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{DATE_SHORT}} &middot; Flex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+<style>
+  :root {
+    --paper:#F4F5F3; --panel:#FCFCFB; --ink:#1B1F24; --ink-soft:#4A525B;
+    --label:#767D86; --rule:#C3C8CD; --rule-soft:#DDE0E3;
+    --accent:#2F6F62; --accent-dim:#E2ECE8; --alert:#A6432C; --alert-dim:#F3E3DF;
+    --f-label:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --f-text:"Newsreader",Georgia,"Times New Roman",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#131619; --panel:#1A1E22; --ink:#E7EAEC; --ink-soft:#A8B0B8;
+      --label:#838C95; --rule:#363D44; --rule-soft:#272D33;
+      --accent:#77B8A7; --accent-dim:#1E2F2B; --alert:#DF8E7B; --alert-dim:#33211D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#131619; --panel:#1A1E22; --ink:#E7EAEC; --ink-soft:#A8B0B8;
+    --label:#838C95; --rule:#363D44; --rule-soft:#272D33;
+    --accent:#77B8A7; --accent-dim:#1E2F2B; --alert:#DF8E7B; --alert-dim:#33211D;
+  }
+  * { box-sizing:border-box; }
+  body {
+    background:var(--paper); color:var(--ink); font-family:var(--f-text);
+    font-size:16px; line-height:1.45; margin:0; padding:20px 14px 56px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet { max-width:760px; margin:0 auto; background:var(--panel);
+           border:1px solid var(--rule); display:flex; flex-direction:column; }
+
+  .masthead { display:flex; align-items:baseline; justify-content:space-between;
+              gap:16px; flex-wrap:wrap; padding:14px 18px 12px;
+              border-bottom:1px solid var(--rule); }
+  .masthead .date { font-family:var(--f-label); font-weight:600; font-size:1.05rem;
+                    letter-spacing:-0.01em; margin:0; }
+  .masthead .stamp { font-family:var(--f-label); font-size:0.66rem; font-weight:500;
+                     text-transform:uppercase; letter-spacing:0.13em;
+                     color:var(--label); font-variant-numeric:tabular-nums; }
+
+  .box { padding:12px 18px 16px; }
+  .box-label { font-family:var(--f-label); font-size:0.63rem; font-weight:600;
+               text-transform:uppercase; letter-spacing:0.19em; color:var(--label);
+               display:flex; align-items:baseline; gap:10px; margin-bottom:9px; }
+  .box-label .count { font-weight:400; letter-spacing:0.08em; color:var(--rule);
+                      font-variant-numeric:tabular-nums; }
+
+  .middle { display:grid; grid-template-columns:1fr; border-top:1px solid var(--rule); }
+  @media (min-width:660px) {
+    .middle { grid-template-columns:1.15fr 1fr; }
+    .col-tasks { border-right:1px solid var(--rule); }
+    .col-right { display:flex; flex-direction:column; }
+    .col-right .box-events { border-top:1px solid var(--rule); flex:1; }
+  }
+  @media (max-width:659px) {
+    .middle { display:flex; flex-direction:column; }
+    .col-tasks { border-top:1px solid var(--rule); order:2; }
+    .col-right { order:1; }
+    .box-events { border-top:1px solid var(--rule); }
+  }
+
+  .goals { display:flex; flex-direction:column; gap:7px; }
+  .goal { display:flex; gap:10px; align-items:baseline; font-size:0.97rem; line-height:1.4; }
+  .goal .horizon { font-family:var(--f-label); font-size:0.58rem; font-weight:600;
+                   text-transform:uppercase; letter-spacing:0.12em; color:var(--accent);
+                   background:var(--accent-dim); padding:2px 6px; flex:none;
+                   position:relative; top:-1px; }
+
+  .priorities { list-style:none; margin:0; padding:0; counter-reset:pri;
+                display:flex; flex-direction:column; gap:10px; }
+  .priorities li { counter-increment:pri; display:grid;
+                   grid-template-columns:1.35rem 1fr; gap:8px; align-items:baseline; }
+  .priorities li::before { content:counter(pri) "."; font-family:var(--f-label);
+                           font-weight:700; font-size:0.9rem; color:var(--accent);
+                           font-variant-numeric:tabular-nums; }
+  .priorities .why { display:block; font-family:var(--f-label); font-size:0.68rem;
+                     letter-spacing:0.02em; color:var(--label); margin-top:2px; }
+
+  .events { display:flex; flex-direction:column; }
+  .event { display:grid; grid-template-columns:4.6rem 1fr; gap:10px; padding:7px 0;
+           border-bottom:1px dotted var(--rule-soft); align-items:baseline; }
+  .event:last-child { border-bottom:0; }
+  .event .time { font-family:var(--f-label); font-size:0.76rem; font-weight:600;
+                 font-variant-numeric:tabular-nums; color:var(--ink); white-space:nowrap; }
+  .event .dur { font-weight:400; color:var(--label); }
+  .event .what { font-size:0.95rem; }
+  .event .with { display:block; font-family:var(--f-label); font-size:0.66rem;
+                 color:var(--label); letter-spacing:0.02em; margin-top:1px; }
+  .gap-row { font-family:var(--f-label); font-size:0.63rem; text-transform:uppercase;
+             letter-spacing:0.14em; color:var(--accent); padding:7px 0;
+             border-bottom:1px dotted var(--rule-soft); }
+
+  .ahead { margin-top:11px; padding-top:9px; border-top:1px solid var(--rule); }
+  .ahead-label { font-family:var(--f-label); font-size:0.58rem; font-weight:600;
+                 text-transform:uppercase; letter-spacing:0.17em; color:var(--label);
+                 margin-bottom:6px; }
+  .ahead-day { display:grid; grid-template-columns:2.5rem 1fr; gap:8px;
+               padding:3px 0; align-items:baseline; }
+  .ahead-day .dow { font-family:var(--f-label); font-size:0.62rem; font-weight:700;
+                    text-transform:uppercase; letter-spacing:0.09em; color:var(--ink);
+                    white-space:nowrap; }
+  .ahead-day .items { font-size:0.85rem; line-height:1.35; color:var(--ink-soft); }
+  .ahead-day .at { font-family:var(--f-label); font-size:0.62rem; color:var(--label);
+                   font-variant-numeric:tabular-nums; }
+  .ahead-day.free .items { color:var(--label); font-style:italic; }
+
+  .tasks { display:flex; flex-direction:column; }
+  .task { display:grid; grid-template-columns:1.1rem 1fr; gap:9px;
+          padding:6px 0 6px 8px; border-bottom:1px dotted var(--rule-soft);
+          border-left:2px solid transparent; align-items:start; }
+  .task:last-of-type { border-bottom:0; }
+  .task.flag-overdue { border-left-color:var(--alert); }
+  .task.flag-stale { border-left-color:var(--rule); }
+  .checkbox { width:13px; height:13px; border:1.25px solid var(--rule);
+              border-radius:2px; margin-top:4px; }
+  .task .what { font-size:0.94rem; line-height:1.35; display:block; }
+  .task .meta { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-top:3px; }
+
+  .src { font-family:var(--f-label); font-size:0.56rem; font-weight:600;
+         text-transform:uppercase; letter-spacing:0.11em; color:var(--label);
+         border:1px solid var(--rule); padding:1px 4px; }
+  .key { font-family:var(--f-mono); font-size:0.68rem; font-weight:500; color:var(--ink-soft); }
+  .key.ticket { color:var(--ink); font-weight:500; }
+  .age { font-family:var(--f-label); font-size:0.63rem; letter-spacing:0.03em; color:var(--label); }
+  .status { font-family:var(--f-label); font-size:0.56rem; font-weight:700;
+            text-transform:uppercase; letter-spacing:0.1em; color:var(--accent);
+            background:var(--accent-dim); padding:1px 5px; white-space:nowrap; }
+  .owner { font-family:var(--f-label); font-size:0.6rem; font-weight:500;
+           letter-spacing:0.02em; color:var(--ink-soft); white-space:nowrap; }
+  .owner.mine { font-weight:700; color:var(--ink); text-transform:uppercase;
+                font-size:0.56rem; letter-spacing:0.1em; }
+  .age.hot { color:var(--alert); background:var(--alert-dim); padding:1px 5px; font-weight:600; }
+
+  .overflow { margin-top:12px; padding-top:10px; border-top:1px solid var(--rule);
+              font-family:var(--f-label); font-size:0.68rem; letter-spacing:0.02em;
+              color:var(--label); }
+  .overflow strong { color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+
+  .box-notes { border-top:1px solid var(--rule); }
+  .notes { display:flex; flex-direction:column; gap:8px; }
+  .note { display:grid; grid-template-columns:0.5rem 1fr; gap:9px; font-size:0.93rem;
+          line-height:1.4; color:var(--ink-soft); }
+  .note::before { content:""; width:4px; height:4px; background:var(--rule); margin-top:0.6em; }
+
+  .colophon { max-width:760px; margin:12px auto 0; display:flex;
+              justify-content:space-between; gap:12px; flex-wrap:wrap;
+              font-family:var(--f-label); font-size:0.63rem; letter-spacing:0.09em;
+              text-transform:uppercase; color:var(--label); }
+  .empty { font-family:var(--f-label); font-size:0.7rem; color:var(--label);
+           letter-spacing:0.04em; }
+
+  /* Print / PDF: force the light palette regardless of the renderer's theme,
+     and keep each panel whole rather than split across a page break. */
+  @page { size: Letter portrait; margin: 0.4in; }
+  @media print {
+    :root {
+      --paper:#FFFFFF; --panel:#FFFFFF; --ink:#111417; --ink-soft:#3C444C;
+      --label:#6B727B; --rule:#A9B0B7; --rule-soft:#D2D6DA;
+      --accent:#245A4F; --accent-dim:#E8F0ED; --alert:#8E3823; --alert-dim:#F6E7E3;
+    }
+    /* Everything below exists to hold one page. The sheet is a fixed-capacity
+       paper form; a second page defeats the entire point of it. */
+    body { padding:0; background:#FFFFFF; font-size:9pt; line-height:1.3; }
+    .sheet { max-width:none; border-color:var(--rule); }
+    .box { padding:7px 11px 9px; }
+    .box-label { margin-bottom:5px; letter-spacing:0.15em; }
+    .goals { gap:3px; }
+    .goal { font-size:0.95rem; line-height:1.3; }
+    .priorities { gap:5px; }
+    .priorities .why { margin-top:0; }
+    .task { padding:2.5px 0 2.5px 6px; }
+    .task .what { line-height:1.25; }
+    .task .meta { margin-top:1px; gap:5px; }
+    .checkbox { margin-top:2.5px; }
+    .event { padding:3.5px 0; }
+    .gap-row { padding:3.5px 0; }
+    .ahead { margin-top:7px; padding-top:6px; }
+    .ahead-day { padding:1.5px 0; }
+    .notes { gap:4px; }
+    .note { line-height:1.3; }
+    .overflow { margin-top:7px; padding-top:6px; }
+    .masthead { padding:8px 11px 7px; }
+    .middle { grid-template-columns:1.15fr 1fr; }
+    .col-tasks { border-right:1px solid var(--rule); }
+    .col-right { display:flex; flex-direction:column; }
+    .col-right .box-events { border-top:1px solid var(--rule); flex:1; }
+    .col-tasks, .col-right { order:0; }
+    .box, .task, .event, .note, .goal, .priorities li { break-inside:avoid; }
+    .colophon { margin-top:8px; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="masthead">
+    <h1 class="date">{{DATE_LONG}}</h1>
+    <span class="stamp">{{STAMP}}</span>
+  </div>
+
+  <section class="box box-goals">
+    <div class="box-label">Goals</div>
+    <div class="goals">{{GOALS}}</div>
+  </section>
+
+  <div class="middle">
+    <section class="box col-tasks box-tasks">
+      <div class="box-label">Tasks <span class="count">{{TASK_COUNT}}</span></div>
+      <div class="tasks">{{TASKS}}</div>
+      {{OVERFLOW}}
+    </section>
+    <div class="col-right">
+      <section class="box box-priorities">
+        <div class="box-label">Priorities</div>
+        <ol class="priorities">{{PRIORITIES}}</ol>
+      </section>
+      <section class="box box-events">
+        <div class="box-label">Events <span class="count">{{EVENT_COUNT}}</span></div>
+        <div class="events">{{EVENTS}}</div>
+        {{UPCOMING}}
+      </section>
+    </div>
+  </div>
+
+  <section class="box box-notes">
+    <div class="box-label">Notes</div>
+    <div class="notes">{{NOTES}}</div>
+  </section>
+</div>
+<div class="colophon">
+  <span>Rocketbook Flex &middot; dashboard page</span>
+  <span>{{SOURCES}}</span>
+</div>
+</body>
+</html>

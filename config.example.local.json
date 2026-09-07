@@ -1,0 +1,89 @@
+{
+  "profile": "PROFILE_NAME",
+  "timezone": "America/New_York",
+  "mail": {
+    "label": "personal",
+    "account": "you@example.com",
+    "host": "imap.gmail.com",
+    "keychain_key": "PROFILE_mail_app_password",
+    "max_messages": 60,
+    "since_days": 1,
+    "vip": [
+      "someone@example.com",
+      "Full Name"
+    ],
+    "watch_senders": [
+      "@ebay.com"
+    ],
+    "urgent_topics": [
+      "payment due",
+      "auction closing"
+    ],
+    "info_topics": [
+      "shipped",
+      "delivered"
+    ],
+    "watch_topics": [
+      "invoice",
+      "renewal"
+    ]
+  },
+  "calendar": {
+    "enabled": true,
+    "source": "ics",
+    "lookahead_days": 5,
+    "signal_days": 2,
+    "ics_urls": [
+      {
+        "url": "https://\u2026/basic.ics",
+        "label": "personal",
+        "kind": "calendar"
+      },
+      {
+        "url": "https://\u2026/calendar.ics",
+        "label": "signals",
+        "kind": "signal"
+      }
+    ],
+    "skip_all_day_events": true,
+    "ignore_event_titles": []
+  },
+  "reminders": {
+    "enabled": false,
+    "only_lists": [],
+    "skip_lists": [],
+    "timeout": 60
+  },
+  "todoist": {
+    "enabled": false,
+    "keychain_key": "PROFILE_todoist_token",
+    "only_projects": [],
+    "skip_projects": []
+  },
+  "ranking": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-5",
+    "prompt": "partner",
+    "max_tasks": 14,
+    "max_priorities": 3
+  },
+  "output": {
+    "dir": "out-PROFILE",
+    "data_dir": "data-PROFILE",
+    "publish_dir": "publish-PROFILE",
+    "filename": "{date}-{dow}-PROFILE",
+    "keep_days": 30,
+    "pdf": true,
+    "publish_html": false,
+    "email": {
+      "enabled": false,
+      "from": "you@example.com",
+      "to": "you@example.com",
+      "host": "smtp.mail.yahoo.com",
+      "port": 465,
+      "keychain_key": "PROFILE_mail_app_password",
+      "subject": "Planner page - {dow} {date}",
+      "body": "Your page for %s is attached."
+    }
+  }
+}

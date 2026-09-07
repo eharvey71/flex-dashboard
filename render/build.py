@@ -105,10 +105,12 @@ def _dt(iso):
 
 
 def _clock(dt, tz=None):
-    """Feed times arrive in UTC. Print them where the reader actually lives."""
+    """Feed times arrive in UTC. Print them where the reader actually lives,
+    on a 12-hour clock, and drop a bare ":00" so the column stays narrow."""
     if tz is not None and dt.tzinfo is not None:
         dt = dt.astimezone(tz)
-    return dt.strftime("%H:%M")
+    out = dt.strftime("%I:%M %p").lstrip("0")
+    return out.replace(":00 ", " ")
 
 
 # ---------- sections ----------
@@ -131,7 +133,7 @@ def priorities(items):
         for p in items)
 
 
-def tasks(items, idx=None, me=None):
+def tasks(items, idx=None, me=None, capacity=14):
     if not items:
         return '<div class="empty">Nothing worth a checkbox.</div>'
     idx = idx or {"jira": {}, "prs": {}, "pr_tickets": {}}
@@ -149,6 +151,13 @@ def tasks(items, idx=None, me=None):
             '<div class="task%s"><div class="checkbox"></div><div class="body">'
             '<span class="what">%s</span><div class="meta">%s</div></div></div>'
             % (" flag-%s" % e(flag) if flag else "", e(t.get("text")), "".join(meta)))
+
+    # The paper page has fourteen printed checkboxes whether or not they are all
+    # used. Draw the unused ones: they are where he writes his own items in, and
+    # without them the column just looks like dead space.
+    for _ in range(max(0, capacity - len(items))):
+        out.append('<div class="task blank"><div class="checkbox"></div>'
+                   '<div class="body"><span class="what">&nbsp;</span></div></div>')
     return "".join(out)
 
 
@@ -252,7 +261,8 @@ def build(ranked, cfg, bundle=None):
         "STAMP": "Built %s" % datetime.datetime.now().strftime("%H:%M %a"),
         "GOALS": goals(ranked.get("goals")),
         "PRIORITIES": priorities(ranked.get("priorities")),
-        "TASKS": tasks(ranked.get("tasks"), idx, me),
+        "TASKS": tasks(ranked.get("tasks"), idx, me,
+                       cfg["ranking"].get("max_tasks", 14)),
         "TASK_COUNT": "%d of %d lines" % (len(ranked.get("tasks") or []),
                                           cfg["ranking"].get("max_tasks", 14)),
         "EVENTS": events(evs, tz),

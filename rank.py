@@ -56,7 +56,7 @@ def _stamp(value, target, tz):
                     label["weekday"] = t.strftime("%A")
                     label["date_label"] = t.strftime("%a %-d %b %Y")
                     label["days_from_target"] = delta2
-            label["time_label"] = t.strftime("%-I:%M%p").lower().replace(":00", "")
+            label["time_label"] = t.strftime("%I:%M %p").lstrip("0").replace(":00 ", " ")
         except ValueError:
             pass
     return label

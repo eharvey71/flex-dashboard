@@ -100,6 +100,11 @@ Personal-source notes:
 - Only VIP and watch-tagged messages get a body fetch. `watch.kind` is
   "deadline" (auction closing, payment due - can reach PRIORITIES) or
   "informational" (shipping - at most one NOTES line, never a task).
+- Reminders SUBTASKS are not retrievable. Apple's Reminders scripting dictionary
+  exposes name, body, due date, completed and priority - there is no parent/child
+  property, and children do not come back in `every reminder in list`. Verified,
+  not assumed. The workaround in use is putting the detail in the reminder's
+  notes field instead, which IS read. Do not spend a session rediscovering this.
 - Reminders come from AppleScript PLURAL accessors (`name of every reminder
   ...`). JXA reads one property at a time and times out. ~30s; verified working
   under launchd, so the TCC grant does carry across from Terminal.
@@ -109,6 +114,47 @@ Personal-source notes:
 - Most of his reminders are months overdue. The personal prompt treats age as a
   signal, not a flag, and forbids scolding. Do not "helpfully" reinstate a
   nag - that was a deliberate decision.
+
+## rem is relative to :root, not body
+
+The print layout sizes almost everything in `rem`. `rem` resolves against the
+ROOT element. Setting `body { font-size }` therefore changes almost nothing on
+this page - the fit loop ran four times shrinking a value nothing inherited
+from, reported failure, and the type never moved.
+
+Scale `html { font-size }`. If a size change appears to have no effect, this is
+the first thing to check.
+
+## The page fits itself - do not hand-tune the print CSS
+
+`render/pdf.py: fit()` renders, counts the PDF's pages, and re-renders a notch
+smaller until it is one page (9pt start, 7.5pt floor, 0.5pt steps, configurable
+under `output.fit`). Page count is read from the PDF bytes; there is no parser
+in the standard library and no dependency was added for this.
+
+This exists because the alternative was shrinking the stylesheet by hand every
+time the amount of content shifted - 10.5pt, then 9pt, then 8.6pt, each time
+prompted by a page that spilled. If a page spills now, DO NOT edit the print
+font size. Either the fit loop is not running or the day genuinely exceeds the
+floor, and the log says which.
+
+Below the floor the answer is less content, not smaller type: the run logs
+"STILL n PAGES at the floor" and the fix is in the ranking prompt, not the CSS.
+
+`.box` must stay `break-inside: auto` in print. Making the bands unbreakable
+turns a 1.2-page overflow into three pages of white space - that was the
+original bug.
+
+## The mini must never sleep
+
+`pmset -a sleep 0`, and it is load-bearing. launchd does not wake a sleeping
+Mac for a calendar job. A scheduled wake alone is NOT sufficient: with a short
+sleep timer the machine wakes at 20:55, idles, sleeps again a minute later, and
+is asleep when the 21:00 job is due. Everything then fires at once on the next
+wake, contends, and the AppleScript sources time out.
+
+Diagnosis order when runs are late or a source is missing: `pmset -g` (sleep
+value), then `pmset -g sched` (wake registered), THEN this project.
 
 ## When the user says the pages stopped arriving
 

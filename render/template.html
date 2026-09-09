@@ -172,7 +172,9 @@
     }
     /* Everything below exists to hold one page. The sheet is a fixed-capacity
        paper form; a second page defeats the entire point of it. */
-    body { padding:0; background:#FFFFFF; font-size:8.6pt; line-height:1.28; }
+    /* Root, not body: the layout is built in rem and rem ignores body. */
+    html { font-size:8.6pt; }
+    body { padding:0; background:#FFFFFF; font-size:1rem; line-height:1.28; }
     .sheet { max-width:none; border-color:var(--rule); }
     .box { padding:7px 11px 9px; }
     .box-label { margin-bottom:5px; letter-spacing:0.15em; }
@@ -198,7 +200,10 @@
     .col-right { display:flex; flex-direction:column; }
     .col-right .box-events { border-top:1px solid var(--rule); flex:1; }
     .col-tasks, .col-right { order:0; }
-    .box, .task, .event, .note, .goal, .priorities li { break-inside:avoid; }
+    /* Rows stay whole; the big bands may split. An unbreakable .box turns a
+       1.2-page overflow into three pages of white space. */
+    .task, .event, .note, .goal, .priorities li { break-inside:avoid; }
+    .box { break-inside:auto; }
     /* Decorative on screen, wasted height on paper - and the usual culprit
        when the sheet spills a sliver onto a second page. */
     .colophon { display:none; }

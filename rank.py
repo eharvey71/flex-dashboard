@@ -46,6 +46,10 @@ def _stamp(value, target, tz):
     if len(value) > 10 and "T" in value:
         try:
             t = datetime.datetime.fromisoformat(value)
+            # Outlook publishes TZID local times with no offset; treat a naive
+            # value as already being in the reader's zone rather than UTC.
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=tz)
             # ICS feeds publish UTC. Formatting that as-is is how a 3pm meeting
             # becomes a 7pm meeting on the page.
             if t.tzinfo is not None:

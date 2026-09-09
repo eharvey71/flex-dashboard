@@ -27,6 +27,42 @@ STATUS_SHORT = {
 }
 
 
+ORIGIN_ARRAYS = (("jira", "title"), ("github", "title"), ("reminders", "title"),
+                 ("todoist", "title"), ("tasks", "title"), ("mail", "subject"),
+                 ("mail_signals", "title"))
+
+
+def origins(bundle):
+    """Map each source item's own text back to the array it came from.
+
+    The model writes the `source` chip itself and gets it wrong - a Rocket Chat
+    DM in work Gmail came out labelled "reminders". Anything knowable from the
+    data should be looked up, not taken on trust.
+    """
+    out = {}
+    for kind, field in ORIGIN_ARRAYS:
+        for item in bundle.get(kind) or []:
+            text = (item.get(field) or "").strip().lower()
+            if len(text) > 8:
+                out.setdefault(text, kind)
+    return out
+
+
+def _verify_source(task, origin_map):
+    """Prefer the array an item verifiably came from over the model's label."""
+    claimed = (task.get("source") or "").strip().lower()
+    stated = (task.get("origin") or "").strip().lower()
+    if stated and stated in origin_map:
+        return origin_map[stated]
+    # Fall back to matching the task text against source items.
+    text = (task.get("text") or "").strip().lower()
+    if len(text) > 12:
+        for known, kind in origin_map.items():
+            if known in text or text in known:
+                return kind
+    return claimed or None
+
+
 def index(bundle):
     """Authoritative lookups. The model chooses what appears; facts come from here."""
     jira = {i["key"]: i for i in bundle.get("jira", []) if i.get("key")}
@@ -98,10 +134,23 @@ def e(s):
     return html.escape(str(s), quote=True) if s is not None else ""
 
 
-def _dt(iso):
+def _dt(iso, tz=None):
+    """Parse an ICS/API timestamp, always returning an aware datetime.
+
+    Feeds mix forms: Google publishes UTC with a Z, Outlook publishes local
+    times with a TZID and no offset. Comparing one against the other raises,
+    and it took a crash on a real page to surface it. A naive timestamp from a
+    calendar feed is local time by definition, so it gets the reader's zone.
+    """
     if not iso or len(iso) <= 10:
         return None
-    return datetime.datetime.fromisoformat(iso)
+    try:
+        dt = datetime.datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if dt.tzinfo is None and tz is not None:
+        dt = dt.replace(tzinfo=tz)
+    return dt
 
 
 def _clock(dt, tz=None):
@@ -133,7 +182,7 @@ def priorities(items):
         for p in items)
 
 
-def tasks(items, idx=None, me=None, capacity=14):
+def tasks(items, idx=None, me=None, capacity=14, origin_map=None):
     if not items:
         return '<div class="empty">Nothing worth a checkbox.</div>'
     idx = idx or {"jira": {}, "prs": {}, "pr_tickets": {}}
@@ -141,8 +190,9 @@ def tasks(items, idx=None, me=None, capacity=14):
     for t in items:
         flag = t.get("flag")
         meta = []
-        if t.get("source"):
-            meta.append('<span class="src">%s</span>' % e(t["source"]))
+        src = _verify_source(t, origin_map or {})
+        if src:
+            meta.append('<span class="src">%s</span>' % e(src))
         meta.extend(_chips(t, idx, me))
         if t.get("meta"):
             cls = "age hot" if flag == "overdue" else "age"
@@ -166,7 +216,7 @@ def events(items, tz=None):
         return '<div class="empty">Nothing scheduled.</div>'
     out, prev_end = [], None
     for ev in items:
-        start, end = _dt(ev.get("start")), _dt(ev.get("end"))
+        start, end = _dt(ev.get("start"), tz), _dt(ev.get("end"), tz)
 
         if prev_end and start and (start - prev_end).total_seconds() / 60 >= GAP_MIN:
             out.append('<div class="gap-row">%s &ndash; %s &middot; clear</div>'
@@ -212,7 +262,7 @@ def upcoming(items, target_day, days=5, tz=None):
         if evs:
             bits = []
             for ev in evs[:3]:
-                start = _dt(ev.get("start"))
+                start = _dt(ev.get("start"), tz)
                 at = ('<span class="at">%s</span> ' % _clock(start, tz)) if start else ""
                 bits.append("%s%s" % (at, e(ev.get("title"))))
             if len(evs) > 3:
@@ -245,15 +295,16 @@ def overflow(dropped):
 
 # ---------- assembly ----------
 
-def build(ranked, cfg, bundle=None):
+def build(ranked, cfg, bundle=None, trim=0):
     day = datetime.date.fromisoformat(ranked["target_date"])
     idx = index(bundle or {})
+    origin_map = origins(bundle or {})
     tz = ZoneInfo(cfg.get("timezone", "America/New_York"))
     me = (cfg.get("github") or {}).get("login")
     evs = ranked.get("events") or []
     booked = sum(
-        int((_dt(x["end"]) - _dt(x["start"])).total_seconds() // 60)
-        for x in evs if _dt(x.get("start")) and _dt(x.get("end")))
+        int((_dt(x["end"], tz) - _dt(x["start"], tz)).total_seconds() // 60)
+        for x in evs if _dt(x.get("start"), tz) and _dt(x.get("end"), tz))
 
     fields = {
         "DATE_LONG": day.strftime("%A, %-d %B %Y"),
@@ -262,13 +313,15 @@ def build(ranked, cfg, bundle=None):
         "GOALS": goals(ranked.get("goals")),
         "PRIORITIES": priorities(ranked.get("priorities")),
         "TASKS": tasks(ranked.get("tasks"), idx, me,
-                       cfg["ranking"].get("max_tasks", 14)),
+                       0 if trim >= 2 else cfg["ranking"].get("max_tasks", 14),
+                       origin_map),
         "TASK_COUNT": "%d of %d lines" % (len(ranked.get("tasks") or []),
                                           cfg["ranking"].get("max_tasks", 14)),
         "EVENTS": events(evs, tz),
         "EVENT_COUNT": ("%d &middot; %dh %02dm booked" % (len(evs), booked // 60, booked % 60))
                        if evs else "clear",
-        "UPCOMING": upcoming(
+        # trim 1 drops the lookahead strip, trim 2 also drops the blank rows.
+        "UPCOMING": "" if trim >= 1 else upcoming(
             ranked.get("upcoming"), day,
             (cfg.get("google") or cfg.get("calendar") or {}).get("lookahead_days", 5), tz),
         "NOTES": notes(ranked.get("notes")),
@@ -316,10 +369,36 @@ def write(ranked, cfg, bundle=None):
     if out.get("pdf", True):
         from render import pdf as pdfrender
         target = os.path.join(pub_dir, "%s.pdf" % stem)
+        fitcfg = out.get("fit") or {}
+        TRIMS = {0: None, 1: "dropped the 4-day lookahead",
+                 2: "dropped the lookahead and the blank rows"}
         try:
-            pdfrender.render(dated, target)
+            result = None
+            for level in (0, 1, 2):
+                if level:
+                    # Re-render the page with less on it, then try to fit again.
+                    with open(dated, "w") as f:
+                        f.write(build(ranked, cfg, bundle, trim=level))
+                result = pdfrender.fit(
+                    dated, target,
+                    start=fitcfg.get("start_pt", 9.0),
+                    floor=fitcfg.get("floor_pt", 7.5),
+                    step=fitcfg.get("step_pt", 0.5))
+                if result["fitted"]:
+                    break
             pdf_path = target
-            print("  PDF: %s" % target)
+            tries = len(result["attempts"])
+            note = "" if tries == 1 else " (%d renders)" % tries
+            if result["fitted"]:
+                extra = (" - %s" % TRIMS[level]) if level else ""
+                print("  PDF: %s - one page at %.1fpt%s%s"
+                      % (target, result["pt"], note, extra))
+            else:
+                print("  PDF: %s - STILL %d PAGES at the %.1fpt floor with everything "
+                      "trimmed%s" % (target, result["pages"], result["pt"], note),
+                      file=sys.stderr)
+                print("       the day is genuinely too full; the ranking should cut harder",
+                      file=sys.stderr)
         except Exception as ex:
             # Never let a missing PDF cost the page.
             print("  PDF skipped: %s" % ex, file=sys.stderr)

@@ -14,9 +14,9 @@ trap as the Keychain ACL. Run `python3 fetch/local_mac.py test` interactively
 and grant all three BEFORE the nightly job ever needs them.
 """
 
-import json, os, subprocess, sys
+import datetime, json, os, subprocess, sys
 
-TIMEOUT = 120
+TIMEOUT = 180
 
 
 class LocalSourceError(Exception):
@@ -56,15 +56,19 @@ def _jxa(script, timeout=TIMEOUT):
 
 REMINDERS_AS = """
 tell application "Reminders"
+  set FS to (ASCII character 31)
+  set RS to (ASCII character 30)
   set outText to ""
   repeat with l in lists
     set lname to name of l
     set ns to name of (every reminder in l whose completed is false)
     set ds to due date of (every reminder in l whose completed is false)
+    set bs to body of (every reminder in l whose completed is false)
     if (count of ns) > 0 then
       repeat with i from 1 to count of ns
         set n to item i of ns
         set d to item i of ds
+        set b to item i of bs
         if d is missing value then
           set dtxt to ""
         else
@@ -72,7 +76,12 @@ tell application "Reminders"
             text -2 thru -1 of ("0" & ((month of d) as integer as string)) & "-" & ¬
             text -2 thru -1 of ("0" & ((day of d) as string))
         end if
-        set outText to outText & lname & tab & n & tab & dtxt & linefeed
+        if b is missing value then
+          set btxt to ""
+        else
+          set btxt to b as string
+        end if
+        set outText to outText & lname & FS & n & FS & dtxt & FS & btxt & RS
       end repeat
     end if
   end repeat
@@ -82,6 +91,8 @@ end tell
 
 
 def _osascript(script, timeout):
+    # osascript against Reminders is slow when the app is busy syncing; the
+    # caller retries, so a hard failure here is not the end of the source.
     try:
         p = subprocess.run(["osascript", "-e", script],
                            capture_output=True, text=True, timeout=timeout)
@@ -95,24 +106,99 @@ def _osascript(script, timeout):
     return p.stdout
 
 
-def reminders(cfg=None):
+def reminders(cfg=None, target_day=None):
     cfg = cfg or {}
     raw = _osascript(REMINDERS_AS, cfg.get("timeout", 45))
     skip = set(cfg.get("skip_lists", []))
     only = set(cfg.get("only_lists") or [])
 
+    # Unit/record separators, because notes contain tabs and newlines and a
+    # tab-delimited format silently mangles them.
     out = []
-    for line in raw.splitlines():
-        parts = line.split("\t")
+    for record in raw.split("\x1e"):
+        parts = record.split("\x1f")
+        if len(parts) < 4:
+            continue
+        lname, title, due, body = (p.strip() for p in parts[:4])
+        if not title or lname in skip or (only and lname not in only):
+            continue
+        item = {
+            "source": "reminders",
+            "list": lname,
+            "title": title,
+            "due": due or None,
+            "notes": " ".join(body.split())[:400] or None,
+        }
+        # State the model must not have to infer. Given only a bare date it
+        # will guess, and it guesses wrong - a future due date got rendered
+        # as "already flagged overdue".
+        if target_day is not None:
+            iso = target_day.isoformat()
+            item["overdue"] = bool(due and due < iso)
+            item["due_today"] = due == iso
+            item["days_until_due"] = (
+                (datetime.date.fromisoformat(due) - target_day).days if due else None)
+        out.append(item)
+
+    out.sort(key=lambda x: (x["due"] is None, x["due"] or ""))
+    return out
+
+
+COMPLETED_AS = """
+tell application "Reminders"
+  set FS to (ASCII character 31)
+  set RS to (ASCII character 30)
+  set cutoff to (current date) - (%d * days)
+  set outText to ""
+  repeat with l in lists
+    set lname to name of l
+    set ns to name of (every reminder in l whose completed is true and completion date > cutoff)
+    set cs to completion date of (every reminder in l whose completed is true and completion date > cutoff)
+    if (count of ns) > 0 then
+      repeat with i from 1 to count of ns
+        set n to item i of ns
+        set c to item i of cs
+        if c is missing value then
+          set ctxt to ""
+        else
+          set ctxt to ((year of c) as string) & "-" & ¬
+            text -2 thru -1 of ("0" & ((month of c) as integer as string)) & "-" & ¬
+            text -2 thru -1 of ("0" & ((day of c) as string))
+        end if
+        set outText to outText & lname & FS & n & FS & ctxt & RS
+      end repeat
+    end if
+  end repeat
+  return outText
+end tell
+"""
+
+
+def completed_recently(cfg=None, days=10):
+    """Reminders ticked in the last few days.
+
+    Completion is otherwise invisible to this system: every source is read for
+    what is OPEN, so a finished task simply vanishes while the email that
+    announced it sits in the inbox forever. That asymmetry produced a page
+    telling him a submitted timesheet was overdue. This is the positive
+    evidence that contradicts a stale assertion.
+    """
+    cfg = cfg or {}
+    raw = _osascript(COMPLETED_AS % days, cfg.get("timeout", 45))
+    skip = set(cfg.get("skip_lists", []))
+    only = set(cfg.get("only_lists") or [])
+
+    out = []
+    for record in raw.split("\x1e"):
+        parts = record.split("\x1f")
         if len(parts) < 3:
             continue
-        lname, title, due = parts[0].strip(), parts[1].strip(), parts[2].strip()
+        lname, title, done = (p.strip() for p in parts[:3])
         if not title or lname in skip or (only and lname not in only):
             continue
         out.append({"source": "reminders", "list": lname,
-                    "title": title, "due": due or None})
-
-    out.sort(key=lambda x: (x["due"] is None, x["due"] or ""))
+                    "title": title, "completed_on": done or None})
+    out.sort(key=lambda x: x["completed_on"] or "", reverse=True)
     return out
 
 

@@ -80,6 +80,24 @@ def fetch(cfg, target_day):
     return out
 
 
+def completed_recently(cfg, days=10):
+    """Todoist keeps completed tasks on a separate endpoint; open queries never
+    return them. Same purpose as the Reminders equivalent - evidence that
+    something asserted elsewhere has in fact been done."""
+    headers = _auth(cfg)
+    since = (datetime.datetime.utcnow()
+             - datetime.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+    url = "%s/tasks/completed?since=%s" % (API, urllib.parse.quote(since))
+    out = []
+    for t in _all(url, headers):
+        out.append({
+            "source": "todoist",
+            "title": (t.get("content") or t.get("task_id") or "").strip(),
+            "completed_on": (t.get("completed_at") or "")[:10] or None,
+        })
+    return out
+
+
 def check(cfg):
     headers = _auth(cfg)
     tasks = _all("%s/tasks" % API, headers)

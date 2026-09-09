@@ -27,3 +27,4 @@ __pycache__/
 # home directory and a profile name.
 com.*.plist
 !com.example.flex-dashboard.plist
+*.mangled

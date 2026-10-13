@@ -123,11 +123,43 @@ these fields correct, and both change what belongs on the page.
 - `overdue` is a FIELD, not a judgement. Reminders and Todoist items carry `overdue`, `due_today` and `days_until_due` already computed against the target day. Set a task's `flag` to "overdue" only when that field is true, and never write "overdue" in `meta` for something with a future due date. A recurring task is not overdue because an earlier instance was.
 - Every task gets an `origin` field: the item's own text, copied verbatim from the input - a reminder's title, an email's subject, a ticket's title. This is how the page works out which source a line came from, and it is checked against the data. Copy it exactly; do not paraphrase it into the task wording.
 - `source` must name the array the item actually came from. A Rocket Chat notification arrives as Gmail and is "mail", never "reminders". If one obligation appears in two sources - a reminder AND an email about it - that is ONE task line, not two.
+- Nothing appears twice on this page. It is one sheet he reads at a glance, so
+  a repeat is not emphasis, it is a wasted line and a moment of confusion about
+  whether they are two things.
+    * A PRIORITY is never also a TASK. If it earned one of the three slots it
+      does not need a checkbox as well.
+    * One piece of work is one line, however many systems mention it. A ticket,
+      the branch on it, the PR implementing it, the review request about it and
+      the chat message chasing it are ONE task - pick the framing that says what
+      to do next, and put the rest in `meta`.
+    * GOALS are the exception: a goal is the overarching view of the lines
+      below it, so covering the same ground is correct. It must still add the
+      state or outcome they serve rather than reword a single one of them.
+    * A NOTE never restates anything above it. Notes exist for what the lines
+      cannot say.
+  Before returning, read the page back as a whole and check for anything said
+  twice in different words. That is the most common defect in this output.
+- An event carrying `also_on` was on more than one calendar and has already been merged into a single entry. Never list it twice; mention the second calendar only if it says something useful, such as a commitment being on the shared calendar as well as a personal one.
 - Do not invent anything. Every item traces to a field in the input data.
 - GOALS is the horizon behind the day - the outcome the week is moving toward,
   in the reader's own terms. Up to FOUR lines.
-  A goal is a STATE, not a list. "Chapter summaries running clean through the
-  Thursday deploy" is a goal. "Timesheet by Friday, weekly shot Saturday" is two
+  `history.goals_said_in_last_5_days` is what this page already told him, each
+  with the day it ran. A goal that still holds is NOT a reason to skip it - but
+  reprinting its sentence is. Re-express it in today's terms: lead with what
+  moved since, what is left, or what the deadline now is. If three tickets have
+  merged since Monday, Thursday's version of the same goal says the remaining
+  one, not the original four. If nothing at all has changed and you can find no
+  new angle, drop that goal for a day rather than printing the same sentence a
+  fourth time - he stops reading a line he has already read three mornings.
+  Never emit a goal whose wording matches one in that list.
+  EVERY EXAMPLE IN THIS FILE SHOWS FORM, NEVER CONTENT. Do not reuse an
+  example's wording, subject or shape of phrase in a goal you emit. If a line
+  you are about to write resembles an example here, it came from this prompt
+  and not from today's data - throw it away and write what the data says. A
+  goal must trace to tickets, mail, reminders or events in THIS input, and a
+  reader should be able to point at the items it came from.
+  A goal is a STATE, not a list. "<the thing> landed and holding steady" is the
+  shape of a goal. "Timesheet by Friday, weekly shot Saturday" is two
   checkboxes with a comma between them, and it is worse than leaving the band
   empty - it spends a line telling him something the task list already told him.
   Test every goal line before writing it:
@@ -137,9 +169,20 @@ these fields correct, and both change what belongs on the page.
       spans an afternoon.
     * Would it still be on the page if every item under it were done tomorrow?
       If yes, it is a goal. If it disappears with the tasks, it is a summary.
-    * Does it duplicate a TASK or PRIORITY line? Then cut it - never both.
+    * Does it SUBSUME the lines below it rather than reword one of them? A goal
+      may cover the same subject as a task - that is the point, the tasks are
+      how the goal gets met - but it must say something they do not: the state
+      they are moving toward. Echoing one task is a summary; naming what three
+      tasks add up to is a goal.
+  Write GOALS LAST, after the priorities, tasks and notes exist. Read the whole
+  page back and ask what it is all in service of, then write that. Repetition of
+  the lines below is expected and fine - a goal is the overarching view of them,
+  so it necessarily touches the same ground.
+  A goal must also stand on its own to someone reading only the GOALS band. A
+  bare reference is not a goal: "Ready for the 16th" says nothing without the
+  rest of the page, while naming WHAT is happening on the 16th does.
   Several items converging is the strongest source: name what they add up to,
-  not the items. Four tasks about a birthday are the goal "Ready for the 14th",
+  not the items. Four tasks about one birthday are one goal naming that day,
   which is worth a line; listing them again is not.
   Draw from EVERY domain in the data, not just work. A page mixing a work goal
   with a home one is the normal result; all four on work, when the data holds

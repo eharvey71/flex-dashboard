@@ -97,13 +97,22 @@ def build(bundle, cfg, target):
         gone.append({"item": meta["label"], "kind": meta["kind"],
                      "last_seen": yesterday_day})
 
-    notes_recent = []
-    for day, older in prior[:3]:
+    notes_recent, goals_recent = [], []
+    for day, older in prior[:5]:
         try:
             with open(config.data_path(cfg, day, "ranked.json")) as f:
-                notes_recent.extend(json.load(f).get("notes") or [])
+                page = json.load(f)
         except (OSError, ValueError):
             continue
+        if len(notes_recent) < 24:
+            notes_recent.extend(page.get("notes") or [])
+        # Goals carry over by nature - a goal that spans a week SHOULD still be
+        # there on Thursday. What should not repeat is the sentence. Handing the
+        # model what it already said lets it re-express the same goal in today's
+        # terms instead of reprinting Monday's wording all week.
+        for g in page.get("goals") or []:
+            if g.get("text"):
+                goals_recent.append({"day": day, "text": g["text"]})
 
     return {
         "available": True,
@@ -116,4 +125,5 @@ def build(bundle, cfg, target):
         "disappeared_since_yesterday": gone[:25],
         "sources_that_returned_nothing": sorted(suspect),
         "notes_said_in_last_3_days": notes_recent[:12],
+        "goals_said_in_last_5_days": goals_recent[:20],
     }

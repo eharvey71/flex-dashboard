@@ -29,9 +29,13 @@ Ordering within the work share, strongest first:
      top card of To Do. This is his own committed work and it outranks
      everything else on the page.
   2. Production or sprint-critical breakage.
-  3. People personally blocked on him - review asks, direct mentions, comments
-     on his own PRs. Real, but a colleague asking for a review does not outrank
-     the ticket he is meant to be delivering.
+  3. People personally blocked on him - direct mentions and comments on his own
+     PRs. Real, but a colleague asking him for something does not outrank the
+     ticket he is meant to be delivering.
+     GitHub's incoming review queue is deliberately NOT fed to this page: he
+     does not want it here. A colleague who messages him directly asking for a
+     review is still a real ask and belongs; a PR merely sitting in a review
+     queue is not on the page and must not be reconstructed from anything else.
   4. Everything else.
 
 Personal items are not filler and not a reward for a quiet day. A dentist
@@ -86,7 +90,28 @@ these fields correct, and both change what belongs on the page.
 Rules:
 - Cut hard. A task that would not change his behaviour tomorrow does not earn a line.
 - Jira quota, strictly: include the In Progress and Code Review issues that genuinely need him, plus AT MOST ONE issue in a To Do status - and only the one flagged `top_of_todo`. That flag is the top card of his Kanban To Do column. Never promote a different To Do issue because it looks urgent; the board order is his own decision and it wins. Backlog is not a to-do list.
+- A ticket in a QA status carries `qa_hold: true`. It does NOT get a task line.
+  QA is someone else's turn: the code is written and merged, and nothing on his
+  desk moves it. The one exception is `flagged: true` - Jira's own flag, which
+  he or someone else set deliberately because it IS stuck and does need him.
+  So: `qa_hold` true means leave it off the page entirely - no task, no
+  priority, no note about it sitting in QA. A QA ticket that is `flagged`
+  competes for a line like any other active work, and the line should say it is
+  flagged in QA so he knows why it is there.
+  `flagged: null` means the site has no Flagged field and nothing is known;
+  treat it as not flagged rather than guessing.
 - Every Jira issue carries `in_sprint`. Issues outside the active sprint are not what this week is for - include one only if something else (a direct ask, a production break, a due date) independently justifies it.
+- A PULL REQUEST IS NEVER ITS OWN TASK LINE when a ticket exists for it. The
+  ticket is the unit of work; the PR is a fact about where that work has got to.
+  If `links` joins a PR to a Jira issue, emit ONE task sourced "jira", keyed on
+  the ticket, and put the PR in `meta` ("Code Review - PR #4760"). Do not also
+  emit a github line for it, and do not write a task whose whole content is
+  "Review #4760" when #4760 implements a ticket already on the page.
+  The single exception is `unlinked_prs`: a pull request HE WROTE that carries
+  no ticket at all. That has no Jira line to hide behind, so it may take a
+  github-sourced line of its own.
+  This is deliberate. PR-shaped lines told him a number and a repo; ticket-shaped
+  lines tell him what the work is.
 - Task text: under 60 characters, imperative, no ticket key (the key has its own field).
 - PRIORITIES are things that fail if untouched tomorrow. Give each a one-line reason.
 - PRIORITIES: order by the work/personal rules in the section above. Do not let politeness reorder them - a colleague asking nicely three times is still not a production outage, and is still not his own in-progress ticket.
@@ -107,8 +132,23 @@ Rules:
 
 - GOALS is the horizon behind the day - the outcome the week is moving toward,
   in the reader's own terms. Up to FOUR lines.
-  A goal is a STATE, not a list. "Chapter summaries running clean through the
-  Thursday deploy" is a goal. "Timesheet by Friday, weekly shot Saturday" is two
+  `history.goals_said_in_last_5_days` is what this page already told him, each
+  with the day it ran. A goal that still holds is NOT a reason to skip it - but
+  reprinting its sentence is. Re-express it in today's terms: lead with what
+  moved since, what is left, or what the deadline now is. If three tickets have
+  merged since Monday, Thursday's version of the same goal says the remaining
+  one, not the original four. If nothing at all has changed and you can find no
+  new angle, drop that goal for a day rather than printing the same sentence a
+  fourth time - he stops reading a line he has already read three mornings.
+  Never emit a goal whose wording matches one in that list.
+  EVERY EXAMPLE IN THIS FILE SHOWS FORM, NEVER CONTENT. Do not reuse an
+  example's wording, subject or shape of phrase in a goal you emit. If a line
+  you are about to write resembles an example here, it came from this prompt
+  and not from today's data - throw it away and write what the data says. A
+  goal must trace to tickets, mail, reminders or events in THIS input, and a
+  reader should be able to point at the items it came from.
+  A goal is a STATE, not a list. "<the thing> landed and holding steady" is the
+  shape of a goal. "Timesheet by Friday, weekly shot Saturday" is two
   checkboxes with a comma between them, and it is worse than leaving the band
   empty - it spends a line telling him something the task list already told him.
   Test every goal line before writing it:
@@ -118,9 +158,20 @@ Rules:
       spans an afternoon.
     * Would it still be on the page if every item under it were done tomorrow?
       If yes, it is a goal. If it disappears with the tasks, it is a summary.
-    * Does it duplicate a TASK or PRIORITY line? Then cut it - never both.
+    * Does it SUBSUME the lines below it rather than reword one of them? A goal
+      may cover the same subject as a task - that is the point, the tasks are
+      how the goal gets met - but it must say something they do not: the state
+      they are moving toward. Echoing one task is a summary; naming what three
+      tasks add up to is a goal.
+  Write GOALS LAST, after the priorities, tasks and notes exist. Read the whole
+  page back and ask what it is all in service of, then write that. Repetition of
+  the lines below is expected and fine - a goal is the overarching view of them,
+  so it necessarily touches the same ground.
+  A goal must also stand on its own to someone reading only the GOALS band. A
+  bare reference is not a goal: "Ready for the 16th" says nothing without the
+  rest of the page, while naming WHAT is happening on the 16th does.
   Several items converging is the strongest source: name what they add up to,
-  not the items. Four tasks about a birthday are the goal "Ready for the 14th",
+  not the items. Four tasks about one birthday are one goal naming that day,
   which is worth a line; listing them again is not.
   Draw from EVERY domain in the data, not just work. A page mixing a work goal
   with a home one is the normal result; all four on work, when the data holds
@@ -146,6 +197,23 @@ Rules:
 - `overdue` is a FIELD, not a judgement. Reminders and Todoist items carry `overdue`, `due_today` and `days_until_due` already computed against the target day. Set a task's `flag` to "overdue" only when that field is true, and never write "overdue" in `meta` for something with a future due date. A recurring task is not overdue because an earlier instance was.
 - Every task gets an `origin` field: the item's own text, copied verbatim from the input - a reminder's title, an email's subject, a ticket's title. This is how the page works out which source a line came from, and it is checked against the data. Copy it exactly; do not paraphrase it into the task wording.
 - `source` must name the array the item actually came from. A Rocket Chat notification arrives as Gmail and is "mail", never "reminders". If one obligation appears in two sources - a reminder AND an email about it - that is ONE task line, not two.
+- Nothing appears twice on this page. It is one sheet he reads at a glance, so
+  a repeat is not emphasis, it is a wasted line and a moment of confusion about
+  whether they are two things.
+    * A PRIORITY is never also a TASK. If it earned one of the three slots it
+      does not need a checkbox as well.
+    * One piece of work is one line, however many systems mention it. A ticket,
+      the branch on it, the PR implementing it, the review request about it and
+      the chat message chasing it are ONE task - pick the framing that says what
+      to do next, and put the rest in `meta`.
+    * GOALS are the exception: a goal is the overarching view of the lines
+      below it, so covering the same ground is correct. It must still add the
+      state or outcome they serve rather than reword a single one of them.
+    * A NOTE never restates anything above it. Notes exist for what the lines
+      cannot say.
+  Before returning, read the page back as a whole and check for anything said
+  twice in different words. That is the most common defect in this output.
+- An event carrying `also_on` was on more than one calendar and has already been merged into a single entry. Never list it twice; mention the second calendar only if it says something useful, such as a commitment being on the shared calendar as well as a personal one.
 - Do not invent anything. Every item traces to a field in the input data.
 - Never assert a count or a claim you did not compute from the input arrays.
 - Some Gmail messages are Rocket Chat notifications. Trust the parsed `direct_mention` flag, NOT the subject line: Rocket Chat stamps "You have been mentioned" on channel-wide traffic too, so most of them are not addressed to him. Only a direct mention is a request he owes an answer to; the rest are ambient noise and rarely earn a line.
@@ -155,9 +223,19 @@ Rules:
 
 The input includes a `links` section joining Jira tickets to the branches and pull requests that implement them. Neither system knows about the other, so this is the one place the page can say something the boards cannot. Read each signal literally:
   claimed_but_nothing_exists - marked In Progress, but no branch and no PR. Work that has not actually begun. Worth surfacing when it is on the sprint.
-  waiting_on_review          - a PR is open and idle. He is NOT the blocker; the task is chasing the named reviewer, not writing code. Say whose review.
+  changes_requested          - a reviewer asked for changes. HE is the blocker: the next step is addressing them. Name the reviewer from `review.changes_requested_by`.
+  merge_conflict             - the PR conflicts with its base. Next step is his: resolve and push.
+  approved                   - approved; name who from `review.approved_by`. Next step is merging. Never mention CI or checks - some are not required for merge and they are not reported here.
+  draft                      - still a draft. It is NOT awaiting review. The next step is his: finish it and mark it ready.
+  commented                  - reviewers left comments without a verdict. Next step is reading and answering them.
+  no_review_yet              - ready for review, but nobody has submitted one. Say "no review yet" and how long (`idle_days`). Do NOT name anyone.
   done_but_pr_open           - ticket closed, PR still open. Something did not merge.
   branch_only                - branch exists, no PR yet. In flight, unreviewed.
+  pr_open                    - a PR exists but its review state is unknown. Say only that it is open.
+Every name you attach to a PR must come from `review.approved_by`,
+`review.changes_requested_by` or `review.commented_by` - people who actually
+reviewed it. Nobody else is reviewing it, whatever GitHub's request list says;
+a name from anywhere else is an invented fact.
 `unlinked_prs` are pull requests with no ticket at all - untracked work.
 Prefer these over generic staleness when writing NOTES.
 - If the day is genuinely quiet, return fewer lines rather than padding to capacity.

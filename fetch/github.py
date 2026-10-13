@@ -45,11 +45,16 @@ def fetch(cfg):
                 continue
             seen.add(pr["html_url"])
             repo = pr["repository_url"].rsplit("/", 2)
+            author = (pr.get("user") or {}).get("login")
             out.append({
                 "source": "github",
                 "kind": kind,                       # review = blocking someone else
                 "key": "%s/%s #%d" % (repo[-2], repo[-1], pr["number"]),
                 "title": pr.get("title") or "",
+                "author": author,
+                # Whose PR this is, stated rather than implied. Without it a
+                # review request and his own open PR look identical on the page.
+                "mine": author == login,
                 "draft": pr.get("draft", False),
                 "age_days": _age_days(pr.get("created_at")),
                 "idle_days": _age_days(pr.get("updated_at")),
@@ -106,3 +111,78 @@ def repo_state(cfg):
                 raise
 
     return prs, branches
+
+
+MERGE_NOTES = {
+    "clean":    "ready to merge",
+    "dirty":    "merge conflicts",
+    "behind":   "branch is behind base",
+    "blocked":  "blocked - required reviews or checks not met",
+    # "unstable" means only NON-required checks are failing - GitHub still
+    # allows the merge. Reporting it as failing produced false alarms, so it
+    # is treated as mergeable. A failing REQUIRED check shows as "blocked".
+    "unstable": "ready to merge",
+    "draft":    "draft",
+    "has_hooks": "ready to merge",
+}
+
+
+def pr_details(cfg, prs):
+    """What has ACTUALLY happened on his own open PRs.
+
+    `requested_reviewers` only says who was asked - often auto-assigned by
+    CODEOWNERS - and says nothing about whether anyone looked. Reading it as
+    "waiting on X's review" put people's names on the page who had never
+    touched the PR. So for each PR he wrote, read the submitted reviews and
+    GitHub's merge state instead. Two calls per PR, his only.
+
+    Adds `review` to each of his PRs in place:
+      approved_by / changes_requested_by / commented_by - latest review per
+        person, excluding his own; a dismissed review counts for nothing
+      merge_state / merge_note - GitHub's mergeable_state, in plain words.
+        "dirty" means conflicts; non-required check failures are ignored.
+    Any call that fails leaves that part as None rather than guessing.
+    """
+    h = _auth()
+    me = cfg["github"]["login"]
+    for pr in prs:
+        if pr.get("author") != me:
+            continue
+        base = "%s/repos/%s/pulls/%d" % (API, pr["repo"], pr["number"])
+
+        try:
+            reviews = httpjson.get_all_pages(base + "/reviews", h, limit=2)
+        except Exception as ex:
+            print("  note: reviews unavailable for #%d (%s)" % (pr["number"], ex),
+                  file=sys.stderr)
+            reviews = None
+
+        latest = {}
+        for r in reviews or []:           # returned oldest first
+            who = (r.get("user") or {}).get("login")
+            st = r.get("state")
+            if not who or who == me or st == "PENDING":
+                continue
+            if st == "DISMISSED":
+                latest.pop(who, None)
+            elif st == "COMMENTED" and latest.get(who) in ("APPROVED", "CHANGES_REQUESTED"):
+                continue                  # a later comment does not undo a verdict
+            else:
+                latest[who] = st
+
+        try:
+            detail = httpjson.request(base, headers=h)
+            state = detail.get("mergeable_state")
+        except Exception:
+            state = None
+
+        pick = lambda s: sorted(u for u, v in latest.items() if v == s)
+        pr["review"] = {
+            "reviews_known": reviews is not None,
+            "approved_by": pick("APPROVED"),
+            "changes_requested_by": pick("CHANGES_REQUESTED"),
+            "commented_by": pick("COMMENTED"),
+            "merge_state": state,
+            "merge_note": MERGE_NOTES.get(state),
+        }
+    return prs

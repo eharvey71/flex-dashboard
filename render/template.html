@@ -139,8 +139,20 @@
             background:var(--accent-dim); padding:1px 5px; white-space:nowrap; }
   .owner { font-family:var(--f-label); font-size:0.6rem; font-weight:500;
            letter-spacing:0.02em; color:var(--ink-soft); white-space:nowrap; }
-  .owner.mine { font-weight:700; color:var(--ink); text-transform:uppercase;
-                font-size:0.56rem; letter-spacing:0.1em; }
+  /* Ownership is the first thing to read off a GitHub line, so it is the one
+     chip with a filled ground - "my PR" should be findable without reading. */
+  .owner.mine { font-weight:700; text-transform:uppercase; font-size:0.56rem;
+                letter-spacing:0.1em; color:var(--panel);
+                background:var(--accent); padding:1px 5px; }
+  .owner.review { color:var(--label); font-style:italic; }
+
+  /* Sits at the start of the title line, so "which of these is my code" is
+     answerable by scanning the left edge without reading anything. */
+  .badge-mine { font-family:var(--f-label); font-size:0.54rem; font-weight:700;
+                text-transform:uppercase; letter-spacing:0.11em;
+                color:var(--panel); background:var(--accent);
+                padding:1.5px 5px; border-radius:2px; margin-right:6px;
+                vertical-align:0.12em; white-space:nowrap; }
   .age.hot { color:var(--alert); background:var(--alert-dim); padding:1px 5px; font-weight:600; }
 
   .overflow { margin-top:12px; padding-top:10px; border-top:1px solid var(--rule);

@@ -68,17 +68,78 @@ def index(bundle):
     jira = {i["key"]: i for i in bundle.get("jira", []) if i.get("key")}
     prs = {}
     pr_tickets = {}     # PR number -> the ticket(s) it implements
+    ticket_prs = {}     # ticket key -> PR numbers implementing it
     for l in bundle.get("links", []):
         for pr in l.get("prs", []):
             prs[pr["number"]] = pr
             pr_tickets.setdefault(pr["number"], []).append(l["key"])
+            ticket_prs.setdefault(l["key"], []).append(pr["number"])
     for pr in bundle.get("unlinked_prs", []):
         prs.setdefault(pr["number"], pr)
+    # Merge rather than setdefault a stub: the search-sourced items carry the
+    # author and the `mine` flag, and storing only `kind` discarded both.
     for pr in bundle.get("github", []):
         n = PR_NUM.search(pr.get("key") or "")
-        if n:
-            prs.setdefault(int(n.group(1)), {"kind": pr.get("kind")})
-    return {"jira": jira, "prs": prs, "pr_tickets": pr_tickets}
+        if not n:
+            continue
+        num = int(n.group(1))
+        merged = dict(prs.get(num) or {})
+        for k, v in pr.items():
+            if v is not None:
+                merged[k] = v
+        prs[num] = merged
+    return {"jira": jira, "prs": prs, "pr_tickets": pr_tickets,
+            "ticket_prs": ticket_prs}
+
+
+def _owns(task, idx, me):
+    """True when the PR behind this line is his own code.
+
+    Rendered as a badge on the TITLE line, not in the meta row - the meta row
+    is the second line of each task and the eye scans the first.
+    """
+    # The model picks the framing, so the PR number can land anywhere: in the
+    # key on a GitHub-shaped line, or only in `meta` ("Code Review - PR #4760")
+    # when the same work is framed as its Jira ticket. Scan all three, then
+    # fall back to resolving the ticket key through correlate's links. Reading
+    # only key+text meant a page of his own tickets carried no badge at all.
+    nums = set()
+    blob = "%s %s %s" % (task.get("key") or "", task.get("text") or "",
+                         task.get("meta") or "")
+    nums.update(int(m) for m in PR_NUM.findall(blob))
+    k = JIRA_KEY.search(blob)
+    if k:
+        nums.update((idx.get("ticket_prs") or {}).get(k.group(1), []))
+    for num in nums:
+        pr = (idx.get("prs") or {}).get(num) or {}
+        if pr.get("mine") or (me and pr.get("author") == me) or pr.get("kind") == "mine":
+            return True
+    return False
+
+
+def _pr_state_note(pr):
+    """What actually happened on one of his PRs, in a few words.
+
+    Only from submitted reviews and merge state - never from who was merely
+    requested to review, which is how names of people who had never looked at
+    a PR ended up on the page as if they were holding it up.
+    """
+    rv = pr.get("review") or {}
+    sig = pr.get("pr_signal")
+    who = lambda xs: ", ".join("@%s" % x for x in xs[:2])
+    if sig == "draft":
+        return "draft"
+    if sig == "merge_conflict":
+        return "merge conflicts"
+    if sig == "changes_requested":
+        return "changes requested: %s" % who(rv.get("changes_requested_by") or [])
+    if sig == "approved":
+        return "approved: %s" % who(rv.get("approved_by") or [])
+    if sig == "commented":
+        return "comments: %s" % who(rv.get("commented_by") or [])
+    if sig == "no_review_yet":
+        return "no review yet"
+    return None
 
 
 def _chips(task, idx, me):
@@ -118,15 +179,17 @@ def _chips(task, idx, me):
         pr = idx["prs"].get(int(n.group(1)))
         if pr:
             author = pr.get("author")
-            if author == me or pr.get("kind") == "mine":
-                out.append('<span class="owner mine">yours</span>')
+            mine = pr.get("mine") or author == me or pr.get("kind") == "mine"
+            # Ownership is the first thing he needs from a GitHub line: is this
+            # my code, or am I the reviewer? Say it plainly, always.
+            if mine:
+                note = _pr_state_note(pr)
+                if note:
+                    out.append('<span class="owner">%s</span>' % e(note))
             elif author:
-                out.append('<span class="owner">@%s</span>' % e(author))
-            elif pr.get("kind") == "review":
-                out.append('<span class="owner">review req</span>')
-            revs = [r for r in (pr.get("reviewers") or []) if r != me]
-            if revs and (author == me or pr.get("kind") == "mine"):
-                out.append('<span class="owner">waiting: @%s</span>' % e(revs[0]))
+                out.append('<span class="owner review">for @%s</span>' % e(author))
+            else:
+                out.append('<span class="owner review">review request</span>')
     return out
 
 
@@ -199,8 +262,10 @@ def tasks(items, idx=None, me=None, capacity=14, origin_map=None):
             meta.append('<span class="%s">%s</span>' % (cls, e(t["meta"])))
         out.append(
             '<div class="task%s"><div class="checkbox"></div><div class="body">'
-            '<span class="what">%s</span><div class="meta">%s</div></div></div>'
-            % (" flag-%s" % e(flag) if flag else "", e(t.get("text")), "".join(meta)))
+            '<span class="what">%s%s</span><div class="meta">%s</div></div></div>'
+            % (" flag-%s" % e(flag) if flag else "",
+               '<span class="badge-mine">my work</span>' if _owns(t, idx, me) else "",
+               e(t.get("text")), "".join(meta)))
 
     # The paper page has fourteen printed checkboxes whether or not they are all
     # used. Draw the unused ones: they are where he writes his own items in, and

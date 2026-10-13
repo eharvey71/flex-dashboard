@@ -270,6 +270,9 @@ MENTION_RE = None  # built per-call from the configured handle
 GH_URL_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/(\d+)")
 
 
+DM_RE = re.compile(r"direct messaged by|sent you a message", re.I)
+
+
 def classify_mail(messages, cfg):
     """Separate real asks from channel noise, and link chat to code.
 
@@ -294,7 +297,16 @@ def classify_mail(messages, cfg):
         blob = "%s %s" % (m.get("subject", ""), m.get("snippet", ""))
         is_chat = "rocketchat" in m.get("from_addr", "").lower()
         m["is_chat"] = is_chat
-        m["direct_mention"] = bool(is_chat and at_me.search(m.get("snippet", "")))
+        # Two different notifications, both addressed to him personally:
+        # a channel message containing a literal @handle, and a DIRECT MESSAGE,
+        # which carries no @handle at all ("You have been direct messaged by
+        # X" / "X sent you a message:"). Matching only the @handle scored every
+        # DM as channel noise - the strongest signal on the page read as the
+        # weakest.
+        dm = bool(is_chat and DM_RE.search("%s %s"
+                                           % (m.get("subject", ""), m.get("snippet", ""))))
+        m["direct_mention"] = bool(is_chat and (at_me.search(m.get("snippet", "")) or dm))
+        m["is_dm"] = dm
         m["pr_numbers"] = sorted({int(n) for n in GH_URL_RE.findall(blob)})
         if is_chat:
             ch = re.search(r"in (#[\w-]+)", m.get("subject", ""))

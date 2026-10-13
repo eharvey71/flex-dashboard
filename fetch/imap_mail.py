@@ -182,16 +182,24 @@ def fetch(cfg, since_days=1):
         conn.select("INBOX", readonly=True)
 
         if gmail:
-            # Let Gmail drop promotions and social first - it classifies them
-            # better than a keyword list would, and saves fetching them at all.
-            ids = _search(conn, "in:inbox %s -category:promotions -category:social" % window)
+            # Let Gmail drop the machine-generated categories first - it
+            # classifies them better than a keyword list would, and saves
+            # fetching them at all. Updates and Forums are excluded too:
+            # inside a one-day window they are receipts, newsletters, job
+            # alerts and game notifications, two dozen a night, and not one of
+            # them has ever earned a line on the page.
+            ids = _search(conn, "in:inbox %s -category:promotions -category:social "
+                                "-category:updates -category:forums" % window)
 
-            # Then add anyone on the VIP list back unconditionally, in case
-            # Gmail filed a person's mail under a category. People are never noise.
+            # Then add back the senders that matter, in case Gmail filed them
+            # under a category: people on the VIP list (people are never noise)
+            # and the watch senders, whose mail - auctions, invoices, shipping -
+            # lives in Updates by definition.
             addrs = [v for v in cfg.get("vip", []) if "@" in v]
+            addrs += [w for w in cfg.get("watch_senders", []) if "@" in w]
             if addrs:
-                vip_q = "in:inbox %s (%s)" % (window, " OR ".join("from:%s" % a for a in addrs))
-                for mid in _search(conn, vip_q):
+                back_q = "in:inbox %s (%s)" % (window, " OR ".join("from:%s" % a for a in addrs))
+                for mid in _search(conn, back_q):
                     if mid not in ids:
                         ids.append(mid)
         else:
@@ -227,6 +235,11 @@ def fetch(cfg, since_days=1):
                 "subject": subject,
                 "date": when,
                 "age_hours": age_h,
+                # age_days is what every rule in the prompts keys on. The Gmail
+                # API path emits it; this one only emitted age_hours, so half
+                # his mail reached the model with no age at all and stale
+                # threads competed with today's on equal footing.
+                "age_days": (age_h // 24) if age_h is not None else None,
                 "vip": vip,
                 "watch": watch,
                 # Only the messages that matter get a body fetch.

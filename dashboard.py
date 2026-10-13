@@ -109,6 +109,78 @@ def _report_timings():
             print("    %-24s %6.1fs  %s" % (label, secs, status))
 
 
+def _recent_mail(mail, cfg):
+    """Cut stale mail in CODE, before the model ever sees it.
+
+    Fifty-seven messages reached the ranker for fourteen task lines, most of
+    them unclassified and many with no age at all. That is not a judgement the
+    model can make well: mail records what was true when it was sent, and a
+    resolved thread looks exactly like a live one. So the window is enforced
+    here instead.
+
+    The window is ONE day for everything, flagged or not. A wider window for
+    "important" mail was tried and was wrong: a direct message asking for a PR
+    review is complete and forgotten two days later, and nothing in the mail
+    itself ever says so. Age is the only honest signal the page has, so a flag
+    raises an item's PRIORITY inside the window, never its lifespan.
+    Mail whose age cannot be determined is dropped - an unknown age cannot be
+    held to a one-day window.
+    """
+    m_cfg = cfg.get("mail_filter") or {}
+    window = m_cfg.get("window_days", 1)
+    prio = m_cfg.get("priority_window_days", window)
+
+    kept = []
+    for m in mail:
+        age = m.get("age_days")
+        subject = (m.get("subject") or "").lower()
+
+        # Rocket Chat notifications carry a parsed `direct_mention`. Channel
+        # traffic stamped "you have been mentioned" is not addressed to him;
+        # thirty of these arrived in one night. Only a real DM survives.
+        if "direct_mention" in m and not m.get("direct_mention"):
+            continue
+
+        # Calendar invitation mail is the calendar said twice. Events come from
+        # the calendar feeds, which know the real time and whether it moved.
+        if subject.startswith(("invitation:", "updated invitation:", "new event:",
+                               "canceled event:", "cancelled event:",
+                               "accepted:", "declined:", "tentative:")):
+            continue
+
+        flagged = bool(m.get("vip") or m.get("watch") or m.get("direct_mention"))
+        limit = prio if flagged else window
+        if age is None:
+            continue
+        if age <= limit:
+            kept.append(m)
+    return kept
+
+
+def _dedupe_events(events):
+    """One appointment on two calendars is one appointment.
+
+    A shared household calendar and a personal one both carry the same event,
+    and the work API calendar can overlap a published feed of itself. Matching
+    on title plus start plus end is enough - keep the first, and note the other
+    feed it also came from rather than discarding that fact.
+    """
+    seen, out = {}, []
+    for ev in events:
+        key = ((ev.get("title") or "").strip().lower(),
+               (ev.get("start") or "")[:16], (ev.get("end") or "")[:16])
+        if key in seen:
+            first = seen[key]
+            also = first.setdefault("also_on", [])
+            label = ev.get("feed") or ev.get("calendar") or "another calendar"
+            if label not in also:
+                also.append(label)
+            continue
+        seen[key] = ev
+        out.append(ev)
+    return out
+
+
 def _calendar(cfg, day, kind="calendar"):
     """ICS by default. Calendar.app is kept as a fallback but is flaky and
     needs a TCC grant tied to the calling binary, which launchd does not share.
@@ -192,8 +264,11 @@ def cmd_fetch(cfg):
         upcoming += _optional("lookahead", lambda: _lookahead(cfg, day), [])
         bundle["mail_signals"] = _optional("signals", lambda: _signals(cfg, day), [])
 
+    events = _dedupe_events(events)
+    upcoming = _dedupe_events(upcoming)
     events.sort(key=lambda x: (not x.get("all_day"), x.get("start") or ""))
     upcoming.sort(key=lambda x: (x.get("day") or "", x.get("start") or ""))
+    mail = _recent_mail(mail, cfg)
     mail.sort(key=lambda m: (m.get("vip") is None, m.get("watch") is None, m.get("date") or ""))
     bundle["events"], bundle["upcoming"], bundle["mail"] = events, upcoming, mail
 
@@ -218,6 +293,8 @@ def cmd_fetch(cfg):
         bundle["github"] = _optional("github", lambda: github.fetch(cfg), [])
         prs, branches = _optional("github repo state",
                                   lambda: github.repo_state(cfg), ([], []))
+        prs = _optional("github pr reviews",
+                        lambda: github.pr_details(cfg, prs), prs)
         bundle.update(correlate.build(
             bundle["jira"], prs, branches,
             stale_days=cfg["github"].get("stale_days", 2),
@@ -235,6 +312,8 @@ def cmd_fetch(cfg):
               ("mail", len(bundle["mail"])),
               ("vip", len([m for m in bundle["mail"] if m.get("vip")])),
               ("events", len(bundle["events"])), ("ahead", len(bundle["upcoming"])),
+              ("dup events merged", sum(len(e.get("also_on") or [])
+                                        for e in bundle["events"] + bundle["upcoming"])),
               ("signals", len(bundle["mail_signals"])),
               ("reminders", len(bundle["reminders"])),
               ("todoist", len(bundle["todoist"])), ("gtasks", len(bundle["tasks"])),

@@ -139,26 +139,11 @@ Secrets themselves live only in the macOS login Keychain under service
 which also means a Keychain loss is unrecoverable and every token must be
 reissued at its source.
 
-## Why the mini must not sleep
+## Timing
 
-`pmset -a sleep 0`. This is load-bearing, not a preference.
+Jobs run at 21:00 (combined) and 21:30 (second profile), US Eastern. `pmset -a sleep 0`
+keeps the mini awake for them: launchd does not wake a sleeping Mac for a
+calendar job, and a scheduled wake can be beaten by a short sleep timer.
 
-launchd does NOT wake a sleeping Mac for a StartCalendarInterval job; missed
-runs fire on the next wake instead. A `pmset repeat wakeorpoweron` schedule is
-therefore also required - but on its own it is not enough, and the failure is
-subtle:
-
-    wake scheduled 20:55, sleep timer 1 minute, job due 21:00
-    -> wakes at 20:55, idles, sleeps again at ~20:56, still asleep at 21:00
-
-Which is exactly what happened. Both jobs then fired together at 1:15am when
-the machine was next touched, contended, and one run took twelve minutes with
-Reminders timing out entirely - so that morning's page was built without them.
-
-The symptom is a page that exists but is late and thin. Nothing errors. If the
-run.log timestamps do not match the scheduled times, check `pmset -g` for the
-sleep value BEFORE looking at anything in this project.
-
-There is only ONE `pmset repeat` schedule available, so it cannot cover two
-jobs half an hour apart anyway. Never sleeping is what makes the schedule
-reliable.
+Note when reading timestamps from a Claude session: that shell is UTC, so a
+21:00 run appears as 01:00 the next day there.

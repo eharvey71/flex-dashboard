@@ -145,16 +145,20 @@ Below the floor the answer is less content, not smaller type: the run logs
 turns a 1.2-page overflow into three pages of white space - that was the
 original bug.
 
-## The mini must never sleep
+## Claude's shell is UTC; the Mac is not
 
-`pmset -a sleep 0`, and it is load-bearing. launchd does not wake a sleeping
-Mac for a calendar job. A scheduled wake alone is NOT sufficient: with a short
-sleep timer the machine wakes at 20:55, idles, sleeps again a minute later, and
-is asleep when the 21:00 job is due. Everything then fires at once on the next
-wake, contends, and the AppleScript sources time out.
+`device_bash` runs in a Linux VM set to UTC. Every timestamp it reports - `ls`
+mtimes, `date` - is UTC, while the user's Mac, the launchd schedules and the
+log contents are US Eastern.
 
-Diagnosis order when runs are late or a source is missing: `pmset -g` (sleep
-value), then `pmset -g sched` (wake registered), THEN this project.
+A 21:00 job therefore shows up as 01:00 the following day in anything read from
+this shell. That was misread as the schedule failing and produced a confident,
+entirely wrong diagnosis about the machine sleeping through its jobs. Convert
+before concluding anything about timing, or ask the user what their clock says.
+
+`pmset -a sleep 0` is set and worth keeping - launchd genuinely does not wake a
+sleeping Mac for a calendar job, and a short sleep timer can beat a scheduled
+wake to it. But that was not the cause of anything observed here.
 
 ## When the user says the pages stopped arriving
 

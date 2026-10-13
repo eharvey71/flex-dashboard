@@ -15,6 +15,7 @@ tradeoff accepted for a personal calendar.
 """
 
 import datetime, html, re, time, urllib.request
+from zoneinfo import ZoneInfo
 
 _CACHE = {}          # url -> (fetched_at, text)
 CACHE_SECONDS = 300  # one run asks for several days; the feed cannot
@@ -64,8 +65,20 @@ def _unescape(text):
                 .replace("\\\\", "\\")).strip()
 
 
+# The reader's zone, set by fetch() for the life of one call. Every date this
+# module compares against a target day has to be a date in HIS day, not in UTC.
+_LOCAL_TZ = [None]
+
+
 def _parse_dt(value, params):
-    """Returns (date, is_all_day, datetime_or_None)."""
+    """Returns (date, is_all_day, datetime_or_None).
+
+    The date is the date THE READER sees. Google publishes timed events in UTC,
+    so an 8 PM Friday event is 00:00 Saturday UTC; returning the UTC date put it
+    on the wrong day of the lookahead strip - the page said Friday in its notes
+    and Saturday in the next-4-days list, from the same event.
+    An all-day value has no time and no zone, so it is left exactly as written.
+    """
     value = value.strip()
     if params.get("VALUE") == "DATE" or (len(value) == 8 and "T" not in value):
         d = datetime.datetime.strptime(value, "%Y%m%d").date()
@@ -77,7 +90,10 @@ def _parse_dt(value, params):
         return None, False, None
     if value.endswith("Z"):
         dt = dt.replace(tzinfo=datetime.timezone.utc)
-    return dt.date(), False, dt
+    local = dt
+    if dt.tzinfo is not None and _LOCAL_TZ[0] is not None:
+        local = dt.astimezone(_LOCAL_TZ[0])
+    return local.date(), False, dt
 
 
 def _events_raw(text):
@@ -217,6 +233,7 @@ def _feeds(cfg):
 
 def fetch(cfg, day):
     out, overridden = [], set()
+    _LOCAL_TZ[0] = ZoneInfo(cfg.get("timezone", "America/New_York"))
 
     for feed in _feeds(cfg):
         url = feed["url"]

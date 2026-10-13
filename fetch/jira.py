@@ -1,11 +1,42 @@
 """Jira Cloud REST v3. Basic auth: account email + API token."""
 
-import base64, os, sys, urllib.parse
+import base64, os, re, sys, urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import creds, httpjson
 
 FIELDS = "summary,status,priority,duedate,issuetype,parent,updated,labels,assignee"
+
+# Jira's "Flagged" is a custom field whose id differs per site, so it has to be
+# looked up by name rather than hard-coded. Cached for the life of the process.
+_FLAG_FIELD = []
+
+
+def flag_field(cfg):
+    """The custom-field id of Jira's Flagged field, or None if the site has none."""
+    if _FLAG_FIELD:
+        return _FLAG_FIELD[0]
+    found = None
+    try:
+        for f in httpjson.request("https://%s/rest/api/3/field" % cfg["jira"]["site"],
+                                  headers=_auth(cfg)) or []:
+            if (f.get("name") or "").strip().lower() == "flagged":
+                found = f.get("id")
+                break
+    except Exception as ex:
+        print("  note: could not look up the Flagged field (%s)" % ex, file=sys.stderr)
+    _FLAG_FIELD.append(found)
+    return found
+
+
+def _is_qa(status):
+    """True for any QA-ish status - "QA Ready", "Pending QA Deploy", "In QA".
+
+    Word-boundary matching on purpose: a status merely containing the letters
+    q-a (say "Quality Assurance Backlog") is not what this is for.
+    """
+    words = re.split(r"[^a-z0-9]+", (status or "").lower())
+    return "qa" in words
 
 
 def _auth(cfg):
@@ -17,7 +48,11 @@ def _auth(cfg):
 def _search(cfg, jql, max_results):
     """Board order is Jira's Rank field. Fall back if the instance rejects it."""
     url = "https://%s/rest/api/3/search/jql" % cfg["jira"]["site"]
-    body = {"jql": jql, "maxResults": max_results, "fields": FIELDS.split(",")}
+    fields = FIELDS.split(",")
+    flag = flag_field(cfg)
+    if flag:
+        fields.append(flag)
+    body = {"jql": jql, "maxResults": max_results, "fields": fields}
     try:
         return httpjson.request(url, headers=_auth(cfg), data=body), True
     except httpjson.HttpError as ex:
@@ -32,11 +67,18 @@ def fetch(cfg):
     base = j["jql"].split(" ORDER BY ")[0]
     data, ranked = _search(cfg, base + " ORDER BY Rank ASC", j.get("max_issues", 40))
 
+    flag = flag_field(cfg)
     issues = []
     for it in data.get("issues", []):
         f = it.get("fields") or {}
         status = (f.get("status") or {})
+        # Flagged is a list of option objects when set, None when not. If the
+        # site has no such field at all, say None rather than False - "not
+        # flagged" and "we cannot tell" are different facts.
+        flagged = bool(f.get(flag)) if flag else None
         issues.append({
+            "flagged": flagged,
+            "qa_hold": _is_qa(status.get("name")) and not flagged,
             "source": "jira",
             "key": it.get("key"),
             "title": f.get("summary") or "",

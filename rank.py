@@ -84,11 +84,33 @@ def _label_dates(obj, target, tz):
     return obj
 
 
+def _drop_qa_holds(bundle):
+    """Remove QA-status tickets the model should never see.
+
+    A ticket sitting in QA is someone else's turn - nothing he does moves it -
+    so it does not belong on the page. Jira's own Flagged field is the one
+    exception: a flagged QA ticket really is stuck and stays.
+
+    Done here rather than only in the prompt so it cannot be argued with, and
+    done on the COPY sent to the model: the full list still reaches correlate
+    and history, which need every ticket to join PRs and count carry-over.
+    """
+    jira = bundle.get("jira")
+    if not isinstance(jira, list):
+        return bundle
+    kept = [i for i in jira if not i.get("qa_hold")]
+    if len(kept) != len(jira):
+        bundle = dict(bundle)
+        bundle["jira"] = kept
+    return bundle
+
+
 def _payload(bundle, cfg):
     r = cfg["ranking"]
     day = datetime.date.fromisoformat(bundle["target_date"])
     tz = ZoneInfo(cfg.get("timezone", "America/New_York"))
     bundle = _label_dates(bundle, day, tz)
+    bundle = _drop_qa_holds(bundle)
     user = ("Target day: %s, a %s.\n"
             "Every dated item below carries a *_when block with the weekday and date "
             "already worked out. Use those; do not calculate dates yourself.\n\n"

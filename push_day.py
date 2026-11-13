@@ -67,6 +67,19 @@ def clock(iso):
     h = d.strftime("%I").lstrip("0") or "12"
     return h + (":" + d.strftime("%M") if d.minute else "") + " " + d.strftime("%p")
 
+def _github_login():
+    """Whose PRs count as his own.
+
+    Read from config.json, which is gitignored: this file is published, and an
+    account name hard-coded here would be published with it.
+    """
+    try:
+        with open(os.path.join(ROOT, "config.json")) as f:
+            return (json.load(f).get("github") or {}).get("login")
+    except (OSError, ValueError):
+        return None
+
+
 def build(date):
     rp = os.path.join(ROOT, "data", date + ".ranked.json")
     bp = os.path.join(ROOT, "data", date + ".json")

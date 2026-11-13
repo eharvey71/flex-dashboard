@@ -93,7 +93,7 @@ them apart:
    timestamp, the pipeline worked and the problem is Evernote, not this code.
 2. `tail -25 logs/run.log` / `logs/run-personal.log` - what the job actually did.
 3. `launchctl print gui/$(id -u)/com.<you>.flex-dashboard | grep -E "state|last exit"`
-4. `pmset -g sched` - the mini must be awake at 21:00; `pmset repeat` holds only
+4. `pmset -g sched` - the Mac must be awake at 21:00; `pmset repeat` holds only
    ONE schedule, so anything that sets its own will silently replace ours.
 
 Evernote's sync folders only import while the Evernote app is RUNNING. It does
@@ -142,7 +142,7 @@ reissued at its source.
 ## Timing
 
 Jobs run at 21:00 (combined) and 21:30 (second profile), US Eastern. `pmset -a sleep 0`
-keeps the mini awake for them: launchd does not wake a sleeping Mac for a
+keeps the Mac awake for them: launchd does not wake a sleeping Mac for a
 calendar job, and a scheduled wake can be beaten by a short sleep timer.
 
 Note when reading timestamps from a Claude session: that shell is UTC, so a

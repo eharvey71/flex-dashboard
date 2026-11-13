@@ -166,7 +166,7 @@ Check whether the PDFs exist on disk BEFORE debugging anything in this project.
 Evernote sync folders import only while the Evernote app is running, and it does
 not backfill what it missed while closed - so a perfectly healthy pipeline looks
 identical to a broken one from the user's side. That has happened once already.
-The other silent killer is the mini being asleep at 21:00; `pmset repeat` holds
+The other silent killer is the Mac being asleep at 21:00; `pmset repeat` holds
 only one schedule and anything else that sets one replaces ours.
 
 ## What is not versioned

@@ -28,3 +28,4 @@ __pycache__/
 com.*.plist
 !com.example.flex-dashboard.plist
 *.mangled
+.daily-push/
